@@ -1,0 +1,168 @@
+/* ── UBIK-TUI Design System ───────────────────────────────────
+   Token palette inspired by GitHub Dark + Tokyo Night.
+   All component styles live here — keep app.py CSS-free.
+──────────────────────────────────────────────────────────── */
+
+/* ── Screen ────────────────────────────────────────────────── */
+
+Screen {
+    background: #0d1117;
+    color: #e6edf3;
+    layers: base overlay;
+}
+
+/* ── Header ────────────────────────────────────────────────── */
+
+Header {
+    background: #161b22;
+    color: #58a6ff;
+    text-style: bold;
+    height: 1;
+    dock: top;
+}
+
+Header #header-icon {
+    display: none;
+}
+
+/* ── Footer ────────────────────────────────────────────────── */
+
+Footer {
+    background: #161b22;
+    color: #8b949e;
+    height: 1;
+}
+
+Footer .footer--key {
+    color: #58a6ff;
+    background: #21262d;
+}
+
+/* ── Main layout ────────────────────────────────────────────── */
+
+Horizontal#main {
+    height: 1fr;
+}
+
+/* ── Session Panel (left) ───────────────────────────────────── */
+
+SessionPanel {
+    width: 28;
+    background: #0d1117;
+    border-right: solid #21262d;
+    padding: 0;
+}
+
+SessionPanel > .panel-header {
+    background: #161b22;
+    color: #8b949e;
+    text-style: bold;
+    padding: 0 2;
+    height: 1;
+    border-bottom: solid #21262d;
+}
+
+SessionPanel ListView {
+    height: 1fr;
+    background: #0d1117;
+    border: none;
+    padding: 0 1;
+}
+
+SessionPanel ListItem {
+    background: #0d1117;
+    color: #8b949e;
+    padding: 0 1;
+    height: 1;
+}
+
+SessionPanel ListItem:hover {
+    background: #161b22;
+    color: #e6edf3;
+}
+
+SessionPanel ListItem.--highlight {
+    background: #1f2937;
+    color: #e6edf3;
+}
+
+SessionPanel #new-session {
+    background: #161b22;
+    color: #3fb950;
+    padding: 0 2;
+    height: 1;
+    border-top: solid #21262d;
+    text-style: bold;
+}
+
+/* ── Chat Panel (center) ────────────────────────────────────── */
+
+ChatPanel {
+    width: 1fr;
+    background: #0d1117;
+    border-right: solid #21262d;
+    padding: 0;
+}
+
+ChatPanel > .panel-header {
+    background: #161b22;
+    color: #8b949e;
+    text-style: bold;
+    padding: 0 2;
+    height: 1;
+    border-bottom: solid #21262d;
+}
+
+ChatPanel RichLog {
+    height: 1fr;
+    background: #0d1117;
+    border: none;
+    padding: 1 2;
+    scrollbar-color: #30363d;
+    scrollbar-color-hover: #58a6ff;
+}
+
+ChatPanel #stream-box {
+    height: auto;
+    min-height: 1;
+    background: #0d1117;
+    color: #e6edf3;
+    padding: 0 2;
+}
+
+ChatPanel Input {
+    background: #161b22;
+    color: #e6edf3;
+    border: tall #30363d;
+    border-top: tall #30363d;
+    padding: 0 2;
+    height: 3;
+    margin: 1 2;
+}
+
+ChatPanel Input:focus {
+    border: tall #58a6ff;
+}
+
+/* ── Context Panel (right) ──────────────────────────────────── */
+
+ContextPanel {
+    width: 26;
+    background: #0d1117;
+    padding: 0;
+}
+
+ContextPanel > .panel-header {
+    background: #161b22;
+    color: #8b949e;
+    text-style: bold;
+    padding: 0 2;
+    height: 1;
+    border-bottom: solid #21262d;
+}
+
+ContextPanel #ctx-stats {
+    color: #8b949e;
+    height: auto;
+    padding: 1 2;
+}

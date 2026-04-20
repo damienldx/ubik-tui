@@ -5,20 +5,18 @@ UBIK-TUI — Full-screen terminal UI.
   [Sessions] | [Chat + streaming] | [Context / QUBIK stats]
 
 Engine: run_headless() from ubik_cli — zero duplication.
+Styles: ubik.tcss — edit that file, not this one.
 """
 
 from __future__ import annotations
 
-import os
-import threading
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Container, Horizontal, Vertical
-from textual.events import Mount
+from textual.containers import Horizontal, Vertical
 from textual.message import Message
 from textual.reactive import reactive
 from textual.widgets import (
@@ -31,9 +29,9 @@ from textual.widgets import (
     RichLog,
     Static,
 )
-from textual.worker import Worker, get_current_worker
+from textual.worker import get_current_worker
 
-from ubik_cli.session import Session, SESSIONS_DIR
+from ubik_cli.session import Session
 from ubik_cli.tools import TOOLS_OPENAI
 
 
@@ -75,33 +73,12 @@ class ToolEvent(Message):
 # ── Panels ────────────────────────────────────────────────────
 
 class SessionPanel(Vertical):
-    """Left panel — session list + [New] button."""
-
-    DEFAULT_CSS = """
-    SessionPanel {
-        width: 22;
-        border-right: solid $accent-darken-2;
-        padding: 0 1;
-    }
-    SessionPanel Label.panel-title {
-        color: $accent;
-        text-style: bold;
-        margin-bottom: 1;
-    }
-    SessionPanel ListView {
-        height: 1fr;
-        border: none;
-    }
-    SessionPanel #new-session {
-        margin-top: 1;
-        color: $success;
-    }
-    """
+    """Left panel — session list."""
 
     def compose(self) -> ComposeResult:
-        yield Label("Sessions", classes="panel-title")
+        yield Label("  SESSIONS", classes="panel-header")
         yield ListView(id="session-list")
-        yield Label("[ + New ]", id="new-session")
+        yield Label("  + New session", id="new-session")
 
     def refresh_sessions(self, current_id: str | None = None) -> None:
         lv = self.query_one("#session-list", ListView)
@@ -112,10 +89,11 @@ class SessionPanel(Vertical):
             self._session_ids.append(s["id"])
             is_current = s["id"] == current_id
             date = s.get("date", "—")
-            title = s.get("title", "—") or "—"
-            marker = "▶" if is_current else " "
-            # Fixed-width date (6 chars), then title
-            label = f"{marker} [dim]{date:<8}[/dim] {title}"
+            title = s.get("title") or "Nouvelle session"
+            if is_current:
+                label = f"[bold #58a6ff]▶ {date:<8}[/bold #58a6ff] [bold #e6edf3]{title}[/bold #e6edf3]"
+            else:
+                label = f"[#444d56]  {date:<8}[/#444d56] [#8b949e]{title}[/#8b949e]"
             items.append(ListItem(Label(label, markup=True)))
         lv.clear()
         for item in items:
@@ -123,99 +101,70 @@ class SessionPanel(Vertical):
 
 
 class ContextPanel(Vertical):
-    """Right panel — QUBIK stats + cortex info."""
-
-    DEFAULT_CSS = """
-    ContextPanel {
-        width: 26;
-        border-left: solid $accent-darken-2;
-        padding: 0 1;
-    }
-    ContextPanel Label.panel-title {
-        color: $accent;
-        text-style: bold;
-        margin-bottom: 1;
-    }
-    ContextPanel Static {
-        color: $text-muted;
-        height: auto;
-    }
-    """
+    """Right panel — QUBIK stats."""
 
     _stats: reactive[dict] = reactive({})
 
     def compose(self) -> ComposeResult:
-        yield Label("Context", classes="panel-title")
-        yield Static("", id="ctx-stats")
+        yield Label("  CONTEXT", classes="panel-header")
+        yield Static("", id="ctx-stats", markup=True)
 
     def update_stats(self, stats: dict) -> None:
         self._stats = stats
         lines = []
+
         if stats.get("intent_type"):
-            lines.append(f"Intent : {stats['intent_type']}")
+            lines.append(f"[#444d56]Intent[/#444d56]  [#e6edf3]{stats['intent_type']}[/#e6edf3]")
         if stats.get("complexity"):
-            lines.append(f"Complexity : {stats['complexity']}")
+            c = stats["complexity"]
+            color = "#3fb950" if c <= 3 else "#d29922" if c <= 6 else "#f85149"
+            lines.append(f"[#444d56]Complex[/#444d56] [{color}]{'█' * c}{'░' * (10 - c)}[/{color}] {c}/10")
         if stats.get("duration_ms"):
-            lines.append(f"QUBIK : {stats['duration_ms']}ms")
+            ms = stats["duration_ms"]
+            color = "#3fb950" if ms < 500 else "#d29922" if ms < 1500 else "#f85149"
+            lines.append(f"[#444d56]QUBIK[/#444d56]   [{color}]{ms}ms[/{color}]")
         if stats.get("skills_count"):
-            lines.append(f"Skills : {stats['skills_count']}")
+            lines.append(f"[#444d56]Skills[/#444d56]  [#58a6ff]{stats['skills_count']}[/#58a6ff]")
         if stats.get("tools_count"):
-            lines.append(f"Tools : {stats['tools_count']}")
+            lines.append(f"[#444d56]Tools[/#444d56]   [#58a6ff]{stats['tools_count']}[/#58a6ff]")
         if stats.get("cortex_injected"):
-            lines.append("Cortex : ✓")
+            lines.append("[#444d56]Cortex[/#444d56]  [#3fb950]● active[/#3fb950]")
         if stats.get("model"):
-            lines.append(f"Model : {stats['model']}")
+            lines.append(f"[#444d56]Model[/#444d56]   [#8b949e]{stats['model']}[/#8b949e]")
         if stats.get("total_tokens"):
-            lines.append(f"Tokens : {stats['total_tokens']:,}")
-        self.query_one("#ctx-stats", Static).update("\n".join(lines) if lines else "Waiting…")
+            lines.append(f"[#444d56]Tokens[/#444d56]  [#8b949e]{stats['total_tokens']:,}[/#8b949e]")
+
+        self.query_one("#ctx-stats", Static).update(
+            "\n".join(lines) if lines else "[#444d56]Waiting…[/#444d56]"
+        )
 
     def clear_stats(self) -> None:
         self._stats = {}
-        self.query_one("#ctx-stats", Static).update("Waiting…")
+        self.query_one("#ctx-stats", Static).update("[#444d56]Waiting…[/#444d56]")
 
 
 class ChatPanel(Vertical):
-    """Center panel — conversation log + streaming widget + input bar."""
-
-    DEFAULT_CSS = """
-    ChatPanel {
-        width: 1fr;
-        padding: 0 1;
-    }
-    ChatPanel RichLog {
-        height: 1fr;
-        border: none;
-        scrollbar-gutter: stable;
-    }
-    ChatPanel #stream-box {
-        height: auto;
-        min-height: 1;
-        color: $text;
-        background: $background;
-        padding: 0 0;
-    }
-    ChatPanel Input {
-        margin-top: 1;
-        border: tall $accent-darken-2;
-    }
-    """
+    """Center panel — conversation log + streaming + input."""
 
     _stream_buf: reactive[str] = reactive("")
 
     def compose(self) -> ComposeResult:
+        yield Label("  CHAT", classes="panel-header", id="chat-header")
         yield RichLog(id="chat-log", highlight=True, markup=True, wrap=True)
         yield Static("", id="stream-box", markup=True)
-        yield Input(placeholder="Message… (Enter to send, Ctrl+C to cancel)", id="chat-input")
+        yield Input(placeholder="Message…  (Enter↵ envoyer  Ctrl+C annuler)", id="chat-input")
 
     def watch__stream_buf(self, value: str) -> None:
         box = self.query_one("#stream-box", Static)
-        if value:
-            box.update(f"[bold green]UBIK[/bold green]  {value}")
-        else:
-            box.update("")
+        box.update(f"[bold #3fb950]UBIK[/bold #3fb950]  {value}" if value else "")
+
+    def set_session_title(self, title: str) -> None:
+        self.query_one("#chat-header", Label).update(f"  {title.upper()}")
 
     def append_user(self, text: str) -> None:
-        self.query_one("#chat-log", RichLog).write(f"\n[bold cyan]You[/bold cyan]  {text}")
+        self.query_one("#chat-log", RichLog).write(
+            f"\n[bold #58a6ff]You[/bold #58a6ff]  [#e6edf3]{text}[/#e6edf3]"
+        )
 
     def append_token(self, text: str) -> None:
         self._stream_buf += text
@@ -226,21 +175,20 @@ class ChatPanel(Vertical):
     def append_tool(self, name: str, is_result: bool, content: str) -> None:
         log = self.query_one("#chat-log", RichLog)
         if is_result:
-            short = content[:80] + ("…" if len(content) > 80 else "")
-            log.write(f"[dim]  ↳ {name}: {short}[/dim]")
+            short = content[:100] + ("…" if len(content) > 100 else "")
+            log.write(f"[#444d56]  ↳ {short}[/#444d56]")
         else:
-            log.write(f"\n[yellow]⚙ {name}[/yellow]")
+            log.write(f"\n[#d29922]⚙ {name}[/#d29922]")
 
     def start_assistant_turn(self) -> None:
         self._stream_buf = ""
 
     def commit_stream(self) -> None:
-        """Move completed stream buffer into the RichLog."""
         text = self._stream_buf
         self._stream_buf = ""
         if text:
             self.query_one("#chat-log", RichLog).write(
-                f"\n[bold green]UBIK[/bold green]  {text}"
+                f"\n[bold #3fb950]UBIK[/bold #3fb950]  [#e6edf3]{text}[/#e6edf3]"
             )
 
     def focus_input(self) -> None:
@@ -253,14 +201,7 @@ class UbikTUI(App):
     """UBIK-TUI — full-screen terminal interface for UBIK-CLI."""
 
     TITLE = "UBIK-TUI"
-    CSS = """
-    Screen {
-        background: $background;
-    }
-    Horizontal#main {
-        height: 1fr;
-    }
-    """
+    CSS_PATH = "ubik.tcss"
 
     BINDINGS = [
         Binding("ctrl+n", "new_session", "New"),
@@ -295,7 +236,10 @@ class UbikTUI(App):
         self._session = Session()
         chat = self.query_one(ChatPanel)
         chat.query_one("#chat-log", RichLog).clear()
-        chat.append_system(f"Session {self._session.id} — {datetime.now().strftime('%H:%M')}", "dim")
+        chat.set_session_title("chat")
+        chat.append_system(
+            f"[#444d56]─── Session {self._session.id}  {datetime.now().strftime('%H:%M')} ───[/#444d56]"
+        )
         self.query_one(SessionPanel).refresh_sessions(self._session.id)
         self.query_one(ContextPanel).clear_stats()
 
@@ -307,13 +251,15 @@ class UbikTUI(App):
         chat = self.query_one(ChatPanel)
         log = chat.query_one("#chat-log", RichLog)
         log.clear()
+        title = self._session.title or "session"
+        chat.set_session_title(title)
         for msg in self._session.messages:
             role = msg.get("role", "")
-            content = msg.get("content", "") or ""
+            content = (msg.get("content") or "")
             if role == "user":
-                log.write(f"\n[bold cyan]You[/bold cyan]  {content[:200]}")
+                log.write(f"\n[bold #58a6ff]You[/bold #58a6ff]  [#e6edf3]{content[:300]}[/#e6edf3]")
             elif role == "assistant":
-                log.write(f"\n[bold green]UBIK[/bold green]  {content[:400]}")
+                log.write(f"\n[bold #3fb950]UBIK[/bold #3fb950]  [#e6edf3]{content[:600]}[/#e6edf3]")
         self.query_one(SessionPanel).refresh_sessions(session_id)
         self.query_one(ContextPanel).clear_stats()
 
@@ -324,11 +270,9 @@ class UbikTUI(App):
         if not text or self._generating:
             return
         event.input.value = ""
-
         if text.startswith("/"):
             self._handle_slash(text)
             return
-
         self._send(text)
 
     def _handle_slash(self, cmd: str) -> None:
@@ -337,11 +281,13 @@ class UbikTUI(App):
             self._new_session()
         elif cmd == "/help":
             chat.append_system(
-                "/new   new session\n/clear  clear display\n/help   this help\nCtrl+N  new  Ctrl+Q  quit",
-                "cyan",
+                "[#58a6ff]/new[/#58a6ff] nouvelle session  "
+                "[#58a6ff]/clear[/#58a6ff] vider  "
+                "[#58a6ff]Ctrl+N[/#58a6ff] new  "
+                "[#58a6ff]Ctrl+Q[/#58a6ff] quitter"
             )
         else:
-            chat.append_system(f"Unknown command: {cmd}", "red")
+            chat.append_system(f"[#f85149]Commande inconnue : {cmd}[/#f85149]")
 
     # ── Streaming worker ──────────────────────────────────────
 
@@ -349,11 +295,8 @@ class UbikTUI(App):
         self._generating = True
         chat = self.query_one(ChatPanel)
         chat.append_user(text)
-
-        # Snapshot messages before adding user turn
         history = list(self._session.messages)
         self._session.messages.append({"role": "user", "content": text})
-
         self.run_worker(
             lambda: self._stream_worker(text, history),
             thread=True,
@@ -362,7 +305,6 @@ class UbikTUI(App):
         )
 
     def _stream_worker(self, prompt: str, history: list) -> None:
-        """Runs in a thread — bridges sync run_headless() to textual messages."""
         worker = get_current_worker()
         from ubik_cli.headless import run_headless
 
@@ -386,7 +328,7 @@ class UbikTUI(App):
                 if et == "token" and event.content:
                     if not assistant_started:
                         assistant_started = True
-                        self.post_message(Token("\x00START"))  # sentinel
+                        self.post_message(Token("\x00START"))
                     full_parts.append(event.content)
                     self.post_message(Token(event.content))
 
@@ -394,12 +336,8 @@ class UbikTUI(App):
                     self.post_message(ToolEvent(event.name or "", is_result=False))
 
                 elif et == "tool_result":
-                    result_text = ""
-                    if hasattr(event, "result"):
-                        result_text = str(event.result or "")[:120]
-                    self.post_message(ToolEvent(
-                        event.name or "", is_result=True, content=result_text
-                    ))
+                    result_text = str(getattr(event, "result", "") or "")[:120]
+                    self.post_message(ToolEvent(event.name or "", is_result=True, content=result_text))
 
                 elif et == "error":
                     self.post_message(StreamError(event.error or "Unknown error"))
@@ -423,7 +361,7 @@ class UbikTUI(App):
 
         self.post_message(StreamDone("".join(full_parts), usage))
 
-    # ── Message handlers (main thread) ───────────────────────
+    # ── Message handlers ──────────────────────────────────────
 
     def on_token(self, message: Token) -> None:
         chat = self.query_one(ChatPanel)
@@ -441,7 +379,7 @@ class UbikTUI(App):
         )
 
     def on_stream_error(self, message: StreamError) -> None:
-        self.query_one(ChatPanel).append_system(f"Error: {message.error}", "red bold")
+        self.query_one(ChatPanel).append_system(f"[#f85149]Erreur : {message.error}[/#f85149]")
         self._generating = False
 
     def on_stream_done(self, message: StreamDone) -> None:
@@ -450,6 +388,10 @@ class UbikTUI(App):
 
         if message.full_text:
             self._session.messages.append({"role": "assistant", "content": message.full_text})
+            if not self._session.title:
+                from ubik_cli.session import _generate_title
+                self._session.title = _generate_title(self._session.messages)
+                chat.set_session_title(self._session.title)
 
         usage = message.usage
         if usage:
@@ -467,18 +409,12 @@ class UbikTUI(App):
     # ── List view: session click ──────────────────────────────
 
     def on_list_view_selected(self, event: ListView.Selected) -> None:
-        lv = self.query_one("#session-list", ListView)
         idx = event.list_view.index
-        sessions_panel = self.query_one(SessionPanel)
-        ids = getattr(sessions_panel, "_session_ids", [])
+        ids = getattr(self.query_one(SessionPanel), "_session_ids", [])
         if idx is not None and idx < len(ids):
             session_id = ids[idx]
             if session_id != (self._session.id if self._session else ""):
                 self._load_session(session_id)
-
-    def on_label_clicked(self, event) -> None:
-        if hasattr(event, "label") and event.label and "+" in str(event.label):
-            self._new_session()
 
     # ── Actions ───────────────────────────────────────────────
 
