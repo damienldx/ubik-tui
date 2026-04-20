@@ -105,17 +105,18 @@ class SessionPanel(Vertical):
 
     def refresh_sessions(self, current_id: str | None = None) -> None:
         lv = self.query_one("#session-list", ListView)
-        # Store session IDs alongside items for click handling
         self._session_ids: list[str] = []
-        sessions = Session.list_all()[:20]
+        sessions = Session.list_all()[:30]
         items = []
         for s in sessions:
             self._session_ids.append(s["id"])
-            preview = s["preview"][:18] or s["id"]
             is_current = s["id"] == current_id
-            label = f"{'▶ ' if is_current else '  '}{s['id']}  {preview}"
-            items.append(ListItem(Label(label)))
-        # Replace all content atomically
+            date = s.get("date", "—")
+            title = s.get("title", "—") or "—"
+            marker = "▶" if is_current else " "
+            # Fixed-width date (6 chars), then title
+            label = f"{marker} [dim]{date:<8}[/dim] {title}"
+            items.append(ListItem(Label(label, markup=True)))
         lv.clear()
         for item in items:
             lv.append(item)
