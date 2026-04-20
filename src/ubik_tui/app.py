@@ -382,20 +382,7 @@ class UbikTUI(App):
 
                 et = event.type
 
-                if et == "qubik_start":
-                    qm = event.qubik or {}
-                    ext = qm.get("extraction", {})
-                    stats = {
-                        "intent_type": ext.get("type", ""),
-                        "complexity": ext.get("complexity", 0),
-                        "duration_ms": qm.get("duration_ms", 0),
-                        "skills_count": len(qm.get("skills", [])),
-                        "tools_count": len(qm.get("tools", [])),
-                        "cortex_injected": qm.get("cortex_injected", False),
-                    }
-                    self.post_message(QubikStats(stats))
-
-                elif et == "token" and event.content:
+                if et == "token" and event.content:
                     if not assistant_started:
                         assistant_started = True
                         self.post_message(Token("\x00START"))  # sentinel
@@ -418,6 +405,17 @@ class UbikTUI(App):
 
                 elif et == "done":
                     usage = event.usage or {}
+                    qm = event.qubik or {}
+                    ext = qm.get("extraction", {})
+                    if qm:
+                        self.post_message(QubikStats({
+                            "intent_type": ext.get("type", "") or qm.get("intent_type", ""),
+                            "complexity": ext.get("complexity", 0) or qm.get("complexity", 0),
+                            "duration_ms": qm.get("duration_ms", 0),
+                            "skills_count": len(qm.get("skills", [])),
+                            "tools_count": len(qm.get("tools", [])),
+                            "cortex_injected": qm.get("cortex_injected", False),
+                        }))
 
         except Exception as exc:
             self.post_message(StreamError(str(exc)))
